@@ -1,21 +1,14 @@
-const mysql = require('mysql2');
-require('dotenv').config(); // Load variables from .env
+const mysql = require('mysql2')
+require('dotenv').config()
 
-//Database connection details
-const db = mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
-});
+const pool = mysql.createPool({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'c372_supermarketdb',
+    waitForConnections: true,
+    connectionLimit: 10,
+    dateStrings: true
+})
 
-//Connecting to database
-db.connect((err) => {
-    if (err) {
-        console.error('Error connecting to MySQL:', err);
-        return;
-    }
-    console.log('Connected to MySQL database');
-});
-
-module.exports = db;
+module.exports = pool.promise()
