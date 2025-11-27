@@ -1,0 +1,57 @@
+<%- include('partials/head', { pageTitle, active: 'users' }) %>
+
+<section class="card border-0 shadow-sm">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="h5 mb-0">User directory</h2>
+                <p class="text-muted mb-0">Manage shopper and admin accounts.</p>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Email</th>
+                        <th scope="col">Contact</th>
+                        <th scope="col">Role</th>
+                        <th scope="col" class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (!users.length) { %>
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">No users found.</td>
+                        </tr>
+                    <% } %>
+                    <% users.forEach(user => { %>
+                        <% const isOtherAdmin = user.role === 'admin' && currentUser && Number(currentUser.id) !== Number(user.id) %>
+                        <tr>
+                            <td>
+                                <div class="fw-semibold"><%= user.username %></div>
+                                <small class="text-muted">#<%= user.id %></small>
+                            </td>
+                            <td><%= user.email %></td>
+                            <td><%= user.contact %></td>
+                            <td>
+                                <span class="badge <%= user.role === 'admin' ? 'bg-primary' : 'bg-secondary' %> text-uppercase">
+                                    <%= user.role %>
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <% if (isOtherAdmin) { %>
+                                    <span class="text-muted small">Admin account</span>
+                                <% } else { %>
+                                    <a href="/admin/users/<%= user.id %>/edit" class="btn btn-outline-primary btn-sm">Edit</a>
+                                <% } %>
+                            </td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<%- include('partials/footer') %>

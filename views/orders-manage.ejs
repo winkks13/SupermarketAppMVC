@@ -1,0 +1,78 @@
+<%- include('partials/head', { pageTitle }) %>
+
+<h1 class="h3 mb-4">Orders dashboard</h1>
+
+<% const statusLabels = {
+    PAID: 'Paid',
+    FULFILLED: 'Fulfilled',
+    CANCELLED: 'Cancelled',
+    CASH_ON_DELIVERY: 'Cash on delivery'
+} %>
+<% const statusClasses = {
+    PAID: 'bg-success',
+    FULFILLED: 'bg-primary',
+    CANCELLED: 'bg-danger',
+    CASH_ON_DELIVERY: 'bg-warning text-dark'
+} %>
+
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Items</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if (!orders.length) { %>
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">No orders yet.</td>
+                    </tr>
+                <% } %>
+                <% orders.forEach(order => { %>
+                    <tr>
+                        <td>
+                            <strong>#<%= order.id %></strong><br>
+                            <small class="text-muted"><%= new Date(order.createdAt).toLocaleString() %></small>
+                        </td>
+                        <td>
+                            <div class="fw-semibold"><%= order.customerName || 'Unknown customer' %></div>
+                            <div class="text-muted small"><%= order.shippingAddress || 'N/A' %></div>
+                        </td>
+                        <td>
+                            <ul class="list-unstyled small mb-0">
+                                <% (order.items || []).forEach(item => { %>
+                                    <li><%= item.productName %> x <%= item.quantity %></li>
+                                <% }) %>
+                            </ul>
+                        </td>
+                        <td>$<%= Number(order.total).toFixed(2) %></td>
+                        <td>
+                            <span class="badge <%= statusClasses[order.status] || 'bg-secondary' %>">
+                                <%= statusLabels[order.status] || order.status %>
+                            </span>
+                        </td>
+                        <td class="text-end">
+                            <form action="/orders/<%= order.id %>/status" method="POST" class="d-flex gap-2">
+                                <select class="form-select form-select-sm" name="status">
+                                    <option value="CASH_ON_DELIVERY" <%= order.status === 'CASH_ON_DELIVERY' ? 'selected' : '' %>>Cash on delivery</option>
+                                    <option value="PAID" <%= order.status === 'PAID' ? 'selected' : '' %>>Paid</option>
+                                    <option value="FULFILLED" <%= order.status === 'FULFILLED' ? 'selected' : '' %>>Fulfilled</option>
+                                    <option value="CANCELLED" <%= order.status === 'CANCELLED' ? 'selected' : '' %>>Cancelled</option>
+                                </select>
+                                <button class="btn btn-outline-primary btn-sm" type="submit">Update</button>
+                            </form>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<%- include('partials/footer') %>

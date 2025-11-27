@@ -1,0 +1,88 @@
+<%- include('partials/head', { pageTitle: 'Card payment' }) %>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <p class="text-uppercase small text-muted mb-1">Payment</p>
+                <h2 class="h5 mb-4">Enter your card details</h2>
+                <form action="/checkout" method="POST" class="v-stack gap-3">
+                    <input type="hidden" name="paymentMethod" value="card">
+                    <div>
+                        <label class="form-label" for="cardName">Name on card</label>
+                        <input class="form-control form-control-lg" type="text" id="cardName" name="cardName" autocomplete="cc-name" required>
+                    </div>
+                    <div>
+                        <label class="form-label" for="cardNumber">Card number</label>
+                        <input class="form-control form-control-lg" type="text" id="cardNumber" name="cardNumber" autocomplete="cc-number" inputmode="numeric" minlength="12" maxlength="19" required>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="expiryMonth">Expiry</label>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <select class="form-select form-select-lg" id="expiryMonth" name="expiryMonth" autocomplete="cc-exp-month" required>
+                                        <option value="" disabled selected>MM</option>
+                                        <% for (let m = 1; m <= 12; m++) { %>
+                                            <% const padded = m.toString().padStart(2, '0') %>
+                                            <option value="<%= padded %>"><%= padded %></option>
+                                        <% } %>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <select class="form-select form-select-lg" id="expiryYear" name="expiryYear" autocomplete="cc-exp-year" required>
+                                        <option value="" disabled selected>YY</option>
+                                        <% const currentYear = new Date().getFullYear() %>
+                                        <% for (let y = 0; y < 12; y++) { %>
+                                            <% const year = currentYear + y %>
+                                            <option value="<%= year.toString().slice(-2) %>"><%= year %></option>
+                                        <% } %>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="cvc">CVC</label>
+                            <input class="form-control form-control-lg" type="text" id="cvc" name="cvc" autocomplete="cc-csc" inputmode="numeric" minlength="3" maxlength="4" required>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-lg w-100" type="submit">Pay now</button>
+                    <p class="text-muted small mb-0 text-center">Shipping to: <%= shippingAddress %></p>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <h3 class="h5 mb-4">Order summary</h3>
+                <ul class="list-group list-group-flush mb-3">
+                    <% cart.items.forEach(item => { %>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <div>
+                                <strong><%= item.productName %></strong>
+                                <p class="text-muted small mb-0"><%= item.quantity %> x $<%= Number(item.price).toFixed(2) %></p>
+                            </div>
+                            <span class="fw-bold">$<%= (item.price * item.quantity).toFixed(2) %></span>
+                        </li>
+                    <% }) %>
+                </ul>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Subtotal</span>
+                    <strong>$<%= cart.totals.subtotal.toFixed(2) %></strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Tax</span>
+                    <strong>$<%= cart.totals.tax.toFixed(2) %></strong>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <span>Total</span>
+                    <strong class="fs-4">$<%= cart.totals.total.toFixed(2) %></strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('partials/footer') %>

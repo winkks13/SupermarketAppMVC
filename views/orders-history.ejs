@@ -1,0 +1,66 @@
+<%- include('partials/head', { pageTitle }) %>
+
+<h1 class="h3 mb-4">Your recent orders</h1>
+
+<% const statusLabels = {
+    PAID: 'Paid',
+    FULFILLED: 'Fulfilled',
+    CANCELLED: 'Cancelled',
+    CASH_ON_DELIVERY: 'Cash on delivery'
+} %>
+<% const statusClasses = {
+    PAID: 'bg-success',
+    FULFILLED: 'bg-primary',
+    CANCELLED: 'bg-danger',
+    CASH_ON_DELIVERY: 'bg-warning text-dark'
+} %>
+
+<div class="row g-4">
+    <% if (!orders.length) { %>
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center text-muted">
+                    No orders yet. Start shopping to build your history!
+                </div>
+            </div>
+        </div>
+    <% } %>
+    <% orders.forEach(order => { %>
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+                        <div>
+                            <h2 class="h5 mb-1">Order #<%= order.displayNumber || order.id %></h2>
+                            <p class="text-muted mb-0"><%= new Date(order.createdAt).toLocaleString() %></p>
+                            <p class="text-muted mb-0">Placed by <strong><%= order.customerName || 'You' %></strong></p>
+                        </div>
+                        <span class="badge <%= statusClasses[order.status] || 'bg-secondary' %>">
+                            <%= statusLabels[order.status] || order.status %>
+                        </span>
+                    </div>
+                    <ul class="list-group list-group-flush mb-3">
+                        <% (order.items || []).forEach(item => { %>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span><%= item.productName %> x <%= item.quantity %></span>
+                                <strong>$<%= (item.price * item.quantity).toFixed(2) %></strong>
+                            </li>
+                        <% }) %>
+                    </ul>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted d-block">Delivered to</small>
+                            <strong><%= order.shippingAddress || 'N/A' %></strong>
+                        </div>
+                        <div class="text-end">
+                            <small class="text-muted d-block">Total paid</small>
+                            <span class="fs-4 fw-bold">$<%= Number(order.total).toFixed(2) %></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <% }) %>
+</div>
+
+<%- include('partials/footer') %>

@@ -1,45 +1,40 @@
 <%- include('partials/head', { pageTitle: 'Login', active: '' }) %>
 
-<section class="row justify-content-center py-4 py-md-5">
-    <div class="col-md-8 col-lg-5">
+<div class="row justify-content-center">
+    <div class="col-md-6">
         <div class="card border-0 shadow-sm">
-            <div class="card-body p-4 p-md-5">
-                <div class="d-flex align-items-center justify-content-between mb-3">
-                    <div>
-                        <p class="text-uppercase small text-muted mb-1">Welcome back</p>
-                        <h3 class="mb-0">Sign in to WinksMart</h3>
-                    </div>
-                    <span class="badge bg-light text-dark">Secure</span>
-                </div>
-                <% if (errors && errors.length) { %>
-                    <div class="alert alert-danger mb-4">
-                        <% errors.forEach(function(error) { %>
-                            <p class="mb-1"><%= error %></p>
-                        <% }); %>
-                    </div>
-                <% } %>
-                <% if (messages && messages.length) { %>
-                    <div class="alert alert-success mb-4">
-                        <% messages.forEach(function(message) { %>
-                            <p class="mb-1"><%= message %></p>
-                        <% }); %>
-                    </div>
-                <% } %>
+            <div class="card-body p-4">
+                <h2 class="h4 mb-4 text-center">Welcome back</h2>
                 <form action="/login" method="POST" class="v-stack gap-3">
                     <div>
-                        <label for="email" class="form-label">Email</label>
-                        <input type="email" id="email" name="email" class="form-control form-control-lg" autocomplete="email" required>
+                        <label class="form-label" for="email">Email</label>
+                        <input class="form-control" type="email" name="email" id="email" placeholder="name@name.com" required>
                     </div>
                     <div>
-                        <label for="password" class="form-label">Password</label>
-                        <input type="password" id="password" name="password" class="form-control form-control-lg" autocomplete="current-password" required>
+                        <label class="form-label" for="password">Password</label>
+                        <input class="form-control" type="password" name="password" id="password" placeholder="Your password" required>
                     </div>
-                    <button type="submit" class="btn btn-primary btn-lg w-100">Login</button>
-                    <p class="text-muted small mb-0 text-center">New here? <a href="/register">Create an account</a></p>
+                    <div class="form-check">
+                        <input class="form-check-input password-toggle" type="checkbox" id="showPassword" data-target="password">
+                        <label class="form-check-label" for="showPassword">Show password</label>
+                    </div>
+                    <button class="btn btn-primary w-100" type="submit">Login</button>
                 </form>
+                <p class="text-center text-muted mt-3 mb-0">Need an account? <a href="/register">Register here</a></p>
             </div>
         </div>
     </div>
-</section>
+</div>
+
+<script>
+    document.querySelectorAll('.password-toggle').forEach(toggle => {
+        const target = document.getElementById(toggle.dataset.target)
+        if (!target) return
+        const sync = () => {
+            target.type = toggle.checked ? 'text' : 'password'
+        }
+        toggle.addEventListener('change', sync)
+    })
+</script>
 
 <%- include('partials/footer') %>
