@@ -1,132 +1,225 @@
-/**
- * Product Controller
- * Handles all product-related operations
- */
-
 const Product = require('../models/Product')
+const Review = require('../models/Review')
+const Wishlist = require('../models/Wishlist')
+
+const getId = (req) => req.params.id
+
+const SORT_OPTIONS = [
+    { id: 'default', label: 'Recommended' },
+    { id: 'price-asc', label: 'Price: Low to High' },
+    { id: 'price-desc', label: 'Price: High to Low' }
+]
+
+const normalizeSortSelection = (input) => {
+    const match = SORT_OPTIONS.find(option => option.id === input)
+    return match ? match.id : 'default'
+}
 
 class ProductController {
-    /**
-     * GET /products
-     * List all products with optional category filter
-     */
-    static listAll(req, res) {
-        const filters = {}
-        
-        if (req.query && req.query.category) {
-            filters.category = req.query.category
+    static async showShop(req, res) {
+        try {
+            const sort = normalizeSortSelection(req.query.sort)
+
+            const [products, categories, stats, wishlistedIds] = await Promise.all([
+                Product.findAll({
+                    search: req.query.search,
+                    category: req.query.category,
+                    sort: sort === 'default' ? null : sort
+                }),
+                Product.getCategories(),
+                Product.getInventoryStats(),
+                Wishlist.getProductIdsForUser(req.session.user.id)
+            ])
+
+            const summaries = await Review.getSummaryByProductIds(products.map(p => p.id))
+
+            res.render('products/shop', {
+                pageTitle: 'Shop Fresh Groceries',
+                products: products.map(product => {
+                    const summary = summaries[product.id] || { avgRating: 5, reviewCount: 0 }
+                    return {
+                        ...product,
+                        rating: summary.avgRating,
+                        reviewCount: summary.reviewCount,
+                        isWishlisted: wishlistedIds.includes(product.id)
+                    }
+                }),
+                categories,
+                filters: {
+                    search: req.query.search || '',
+                    category: req.query.category || 'all',
+                    sort
+                },
+                sortOptions: SORT_OPTIONS,
+                stats,
+                active: 'shop'
+            })
+        } catch (err) {
+            console.error(err)
+            req.flash('error', 'Unable to load products at the moment.')
+            res.redirect('/')
         }
-        
-        Product.getAllProducts(filters, function handleProducts(err, products) {
-            if (err) {
-                return res.status(500).send('Failed to load products')
+    }
+
+    static async showInventory(req, res) {
+        try {
+            const [products, stats] = await Promise.all([
+                Product.findAll(),
+                Product.getInventoryStats()
+            ])
+
+            res.render('products/inventory', {
+                pageTitle: 'Inventory Management',
+                products,
+                stats,
+                active: 'inventory'
+            })
+        } catch (err) {
+            console.error(err)
+            req.flash('error', 'Unable to load inventory.')
+            res.redirect('/')
+        }
+    }
+
+    static async showDetail(req, res) {
+        try {
+            const product = await Product.findById(getId(req))
+            if (!product) {
+                req.flash('error', 'Product not found.')
+                return res.redirect('/shop')
             }
-            return res.render('products/list', { products })
+
+            const [reviews, summary, wishlistedIds] = await Promise.all([
+                Review.findByProduct(product.id),
+                Review.getSummaryByProductIds([product.id]),
+                Wishlist.getProductIdsForUser(req.session.user.id)
+            ])
+
+            const ratingSummary = summary[product.id] || { avgRating: 5, reviewCount: 0 }
+
+            const description = [
+                `Discover our ${product.productName}`,
+                product.category ? `from the ${product.category} aisle` : 'freshly stocked for you',
+                `— perfect for everyday meals and ready to checkout.`
+            ].join(' ')
+
+            res.render('products/detail', {
+                pageTitle: product.productName,
+                product,
+                description,
+                reviews,
+                rating: ratingSummary,
+                isWishlisted: wishlistedIds.includes(product.id)
+            })
+        } catch (err) {
+            console.error(err)
+            req.flash('error', 'Unable to load product.')
+            res.redirect('/shop')
+        }
+    }
+
+    static showCreateForm(_req, res) {
+        res.render('products/form', {
+            pageTitle: 'Add New Product',
+            product: {},
+            isEdit: false
         })
     }
 
-    /**
-     * GET /products/:id
-     * Get a specific product by ID
-     */
-    static getById(req, res) {
-        function handleProduct(err, product) {
-            if (err) {
-                return res.status(500).send('Failed to load product')
+    static async create(req, res) {
+        try {
+            const payload = {
+                productName: req.body.productName,
+                price: Number(req.body.price) || 0,
+                category: req.body.category,
+                quantity: Number(req.body.quantity) || 0,
+                image: req.file ? req.file.filename : 'apples.png'
             }
+
+            await Product.create(payload)
+            req.flash('success', 'Product added successfully.')
+            res.redirect('/inventory')
+        } catch (err) {
+            console.error(err)
+            req.flash('error', 'Unable to add product. Please try again.')
+            res.redirect('/products/new')
+        }
+    }
+
+    static async showEditForm(req, res) {
+        try {
+            const product = await Product.findById(getId(req))
             if (!product) {
-                return res.status(404).send('Product not found')
+                req.flash('error', 'Product not found.')
+                return res.redirect('/inventory')
             }
-            return res.render('products/detail', { product })
-        }
 
-        Product.getProductById(req.params.id, handleProduct)
+            res.render('products/form', {
+                pageTitle: 'Edit Product',
+                product,
+                isEdit: true
+            })
+        } catch (err) {
+            console.error(err)
+            req.flash('error', 'Unable to load product information.')
+            res.redirect('/inventory')
+        }
     }
 
-    /**
-     * GET /products/add
-     * Show the add product form
-     */
-    static showAddForm(req, res) {
-        return res.render('products/add')
+    static async update(req, res) {
+        try {
+            const updates = {
+                productName: req.body.productName,
+                price: Number(req.body.price) || 0,
+                category: req.body.category,
+                quantity: Number(req.body.quantity) || 0,
+                image: req.file ? req.file.filename : (req.body.currentImage || 'apples.png')
+            }
+
+            await Product.update(getId(req), updates)
+            req.flash('success', 'Product updated successfully.')
+            res.redirect('/inventory')
+        } catch (err) {
+            console.error(err)
+            req.flash('error', 'Unable to update product.')
+            res.redirect(`/products/${getId(req)}/edit`)
+        }
     }
 
-    /**
-     * POST /products/add
-     * Add a new product
-     */
-    static add(req, res) {
-        function handleAdd(err, info) {
-            if (err) {
-                return res.status(500).send('Failed to add product')
-            }
-            return res.redirect('/products')
+    static async remove(req, res) {
+        try {
+            await Product.remove(getId(req))
+            req.flash('success', 'Product removed.')
+        } catch (err) {
+            console.error(err)
+            req.flash('error', 'Unable to delete product.')
         }
 
-        const product = {
-            productName: req.body.productName,
-            price: req.body.price,
-            category: req.body.category,
-            image: req.body.image
-        }
-
-        Product.addProduct(product, handleAdd)
+        res.redirect('/inventory')
     }
 
-    /**
-     * GET /products/:id/edit
-     * Show the edit product form
-     */
-    static showEditForm(req, res) {
-        function handleEdit(err, product) {
-            if (err) {
-                return res.status(500).send('Failed to load product for edit')
-            }
+    static async addReview(req, res) {
+        try {
+            const product = await Product.findById(getId(req))
             if (!product) {
-                return res.status(404).send('Product not found')
+                req.flash('error', 'Product not found.')
+                return res.redirect('/shop')
             }
-            return res.render('products/edit', { product })
+
+            await Review.create({
+                productId: product.id,
+                userId: req.session.user.id,
+                rating: req.body.rating || 5,
+                comment: req.body.comment || ''
+            })
+
+            req.flash('success', 'Review submitted. Thank you!')
+        } catch (err) {
+            console.error(err)
+            req.flash('error', 'Unable to submit review right now.')
         }
 
-        Product.getProductById(req.params.id, handleEdit)
-    }
-
-    /**
-     * POST /products/:id/edit
-     * Update an existing product
-     */
-    static update(req, res) {
-        function handleUpdate(err, info) {
-            if (err) {
-                return res.status(500).send('Failed to update product')
-            }
-            return res.redirect('/products')
-        }
-
-        const params = {
-            productId: req.params.id,
-            productName: req.body.productName,
-            price: req.body.price,
-            category: req.body.category,
-            image: req.body.image
-        }
-
-        Product.updateProduct(params, handleUpdate)
-    }
-
-    /**
-     * POST /products/:id/delete
-     * Delete a product
-     */
-    static delete(req, res) {
-        function handleDelete(err, info) {
-            if (err) {
-                return res.status(500).send('Failed to delete product')
-            }
-            return res.redirect('/products')
-        }
-
-        Product.deleteProduct(req.params.id, handleDelete)
+        res.redirect(`/products/${getId(req)}`)
     }
 }
 
