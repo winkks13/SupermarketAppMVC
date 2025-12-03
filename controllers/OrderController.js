@@ -1,6 +1,6 @@
 const Product = require('../models/Product')
 const Order = require('../models/Order')
-const { getCart, calculateTotals, clearCart } = require('../utils/cart')
+const { getCart, calculateTotals, clearCart } = require('./cartUtils')
 
 const getUserId = (user = {}) => user?.id
 const ALLOWED_STATUSES = ['PAID', 'FULFILLED', 'CANCELLED', 'CASH_ON_DELIVERY']
@@ -17,7 +17,7 @@ class OrderController {
 
         calculateTotals(cart)
 
-        res.render('checkout/index', {
+        res.render('checkout', {
             pageTitle: 'Checkout',
             cart
         })
@@ -62,7 +62,7 @@ class OrderController {
                     paymentMethod
                 }
 
-                return res.render('checkout/card', {
+                return res.render('checkout-card', {
                     pageTitle: 'Card payment',
                     cart,
                     shippingAddress
@@ -115,7 +115,7 @@ class OrderController {
                 ...order,
                 displayNumber: orders.length - index
             }))
-            res.render('orders/history', {
+            res.render('orders-history', {
                 pageTitle: 'Your orders',
                 orders: ordersWithDisplay
             })
@@ -129,7 +129,7 @@ class OrderController {
     static async adminList(_req, res) {
         try {
             const orders = await Order.findAll()
-            res.render('orders/manage', {
+            res.render('orders-manage', {
                 pageTitle: 'Orders dashboard',
                 orders
             })

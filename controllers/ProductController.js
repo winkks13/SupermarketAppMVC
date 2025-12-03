@@ -16,6 +16,32 @@ const normalizeSortSelection = (input) => {
 }
 
 class ProductController {
+    static async showHome(req, res) {
+        try {
+            const isAdmin = req.session?.user?.role === 'admin'
+            const featuredPromise = Product.findFeatured(4)
+            const statsPromise = isAdmin ? Product.getInventoryStats() : null
+
+            const [featured, stats] = await Promise.all([
+                featuredPromise,
+                statsPromise
+            ])
+
+            res.render('home', {
+                pageTitle: 'WinksMart',
+                featured,
+                stats: stats || null
+            })
+        } catch (err) {
+            console.error(err)
+            res.render('home', {
+                pageTitle: 'WinksMart',
+                featured: [],
+                stats: null
+            })
+        }
+    }
+
     static async showShop(req, res) {
         try {
             const sort = normalizeSortSelection(req.query.sort)
@@ -33,7 +59,7 @@ class ProductController {
 
             const summaries = await Review.getSummaryByProductIds(products.map(p => p.id))
 
-            res.render('products/shop', {
+            res.render('shop', {
                 pageTitle: 'Shop Fresh Groceries',
                 products: products.map(product => {
                     const summary = summaries[product.id] || { avgRating: 5, reviewCount: 0 }
@@ -68,7 +94,7 @@ class ProductController {
                 Product.getInventoryStats()
             ])
 
-            res.render('products/inventory', {
+            res.render('inventory', {
                 pageTitle: 'Inventory Management',
                 products,
                 stats,
@@ -103,7 +129,7 @@ class ProductController {
                 `— perfect for everyday meals and ready to checkout.`
             ].join(' ')
 
-            res.render('products/detail', {
+            res.render('product-detail', {
                 pageTitle: product.productName,
                 product,
                 description,
@@ -119,7 +145,7 @@ class ProductController {
     }
 
     static showCreateForm(_req, res) {
-        res.render('products/form', {
+        res.render('product-form', {
             pageTitle: 'Add New Product',
             product: {},
             isEdit: false
@@ -154,7 +180,7 @@ class ProductController {
                 return res.redirect('/inventory')
             }
 
-            res.render('products/form', {
+            res.render('product-form', {
                 pageTitle: 'Edit Product',
                 product,
                 isEdit: true

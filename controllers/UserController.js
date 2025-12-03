@@ -14,7 +14,7 @@ const hasMissingProfileFields = (payload = {}) =>
 
 class UserController {
     static showRegister(_req, res) {
-        res.render('auth/register', {
+        res.render('register', {
             pageTitle: 'Create an account'
         })
     }
@@ -57,7 +57,7 @@ class UserController {
     }
 
     static showLogin(_req, res) {
-        res.render('auth/login', {
+        res.render('login', {
             pageTitle: 'Welcome back'
         })
     }
@@ -99,7 +99,7 @@ class UserController {
                 return res.redirect('/shop')
             }
 
-            res.render('users/profile', {
+            res.render('profile', {
                 pageTitle: 'Your profile',
                 user,
                 active: 'account'
@@ -156,7 +156,7 @@ class UserController {
     static async listUsers(_req, res) {
         try {
             const users = await User.findAll()
-            res.render('users/manage', {
+            res.render('users-manage', {
                 pageTitle: 'User management',
                 users,
                 active: 'users'
@@ -187,7 +187,7 @@ class UserController {
                 return res.redirect('/admin/users')
             }
 
-            res.render('users/admin-edit', {
+            res.render('users-admin-edit', {
                 pageTitle: `Edit ${user.username}`,
                 user,
                 isSelf: Number(req.session.user.id) === Number(user.id),

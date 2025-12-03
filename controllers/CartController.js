@@ -1,5 +1,5 @@
 const Product = require('../models/Product')
-const { getCart, calculateTotals, clearCart } = require('../utils/cart')
+const { getCart, calculateTotals, clearCart } = require('./cartUtils')
 
 class CartController {
     static async addItem(req, res) {
@@ -72,7 +72,7 @@ class CartController {
 
             calculateTotals(cart)
 
-            res.render('cart/index', {
+            res.render('cart', {
                 pageTitle: 'Your cart',
                 cart
             })

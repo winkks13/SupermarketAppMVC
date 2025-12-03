@@ -35,7 +35,7 @@ class WishlistController {
         try {
             const ids = await Wishlist.getProductIdsForUser(req.session.user.id)
             if (!ids.length) {
-                return res.render('wishlist/index', {
+                return res.render('wishlist', {
                     pageTitle: 'Your wishlist',
                     products: [],
                     active: 'wishlist'
@@ -54,7 +54,7 @@ class WishlistController {
                 }
             })
 
-            res.render('wishlist/index', {
+            res.render('wishlist', {
                 pageTitle: 'Your wishlist',
                 products: enriched,
                 active: 'wishlist'
