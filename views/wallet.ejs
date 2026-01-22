@@ -1,0 +1,152 @@
+<%- include('partials/head', { pageTitle, active: '' }) %>
+
+<section class="row justify-content-center">
+    <div class="col-lg-8 col-md-10">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                    <div>
+                        <h2 class="h4 mb-1">Wallet top-up</h2>
+                        <p class="text-muted mb-0">Current balance: $<%= Number(user.walletBalance || 0).toFixed(2) %></p>
+                    </div>
+                    <span class="badge bg-primary-subtle text-primary">Buyer top-up</span>
+                </div>
+                <form action="/wallet/recharge" method="POST" class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label d-block">Quick top-up</label>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-wallet-amount="20">$20</button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-wallet-amount="50">$50</button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-wallet-amount="100">$100</button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-wallet-amount="200">$200</button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="walletAmount">Enter an amount</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="text" class="form-control" id="walletAmount" name="amount" inputmode="decimal" placeholder="0.00" required>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="cardName">Cardholder name</label>
+                        <input type="text" class="form-control" id="cardName" name="cardName" placeholder="Jordan Lee" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="cardNumber">Card number</label>
+                        <input type="text" class="form-control" id="cardNumber" name="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="1234 5678 9012 3456" maxlength="19" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="cardExpiry">Expiry (MM/YY)</label>
+                        <input type="text" class="form-control" id="cardExpiry" name="cardExpiry" autocomplete="cc-exp" placeholder="08/29" maxlength="5" inputmode="numeric" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="cardCvv">CVV</label>
+                        <input type="text" class="form-control" id="cardCvv" name="cardCvv" inputmode="numeric" autocomplete="cc-csc" placeholder="123" maxlength="3" required>
+                    </div>
+                    <div class="col-12 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <small class="text-muted">Card details are used only to simulate the top-up.</small>
+                        <button type="submit" class="btn btn-primary">Recharge wallet</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+    (() => {
+        const amountInput = document.getElementById('walletAmount')
+        const quickButtons = document.querySelectorAll('[data-wallet-amount]')
+        if (!amountInput || !quickButtons.length) return
+        quickButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                amountInput.value = button.getAttribute('data-wallet-amount')
+                amountInput.focus()
+            })
+        })
+    })()
+    ;(() => {
+        const amountInput = document.getElementById('walletAmount')
+        if (!amountInput) return
+        amountInput.addEventListener('input', () => {
+            const raw = amountInput.value
+            const cursor = amountInput.selectionStart
+            let sanitized = ''
+            let cursorInSanitized = 0
+            let hasDot = false
+            let decimals = 0
+            for (let i = 0; i < raw.length; i += 1) {
+                const ch = raw[i]
+                const isCursorPos = cursor !== null && i < cursor
+                if (ch >= '0' && ch <= '9') {
+                    if (hasDot) {
+                        if (decimals < 2) {
+                            sanitized += ch
+                            decimals += 1
+                            if (isCursorPos) cursorInSanitized += 1
+                        }
+                    } else {
+                        sanitized += ch
+                        if (isCursorPos) cursorInSanitized += 1
+                    }
+                } else if (ch === '.' && !hasDot) {
+                    hasDot = true
+                    sanitized += ch
+                    if (isCursorPos) cursorInSanitized += 1
+                }
+            }
+            amountInput.value = sanitized
+            if (cursor !== null) {
+                requestAnimationFrame(() => {
+                    const pos = Math.min(amountInput.value.length, Math.max(0, cursorInSanitized))
+                    amountInput.setSelectionRange(pos, pos)
+                })
+            }
+        })
+    })()
+    ;(() => {
+        const cardInput = document.getElementById('cardNumber')
+        if (!cardInput) return
+        const formatCardNumber = (value) => {
+            const digitsOnly = value.replace(/\D/g, '').slice(0, 16)
+            return digitsOnly.replace(/(\d{4})(?=\d)/g, '$1 ')
+        }
+        cardInput.addEventListener('input', (event) => {
+            const rawValue = event.target.value
+            const cursor = event.target.selectionStart || 0
+            const digitsBeforeCursor = rawValue.slice(0, cursor).replace(/\D/g, '').length
+            const formatted = formatCardNumber(rawValue)
+            event.target.value = formatted
+            let newCursor = digitsBeforeCursor + Math.floor((digitsBeforeCursor - 1) / 4)
+            if (digitsBeforeCursor === 0) {
+                newCursor = 0
+            }
+            newCursor = Math.min(formatted.length, Math.max(0, newCursor))
+            event.target.setSelectionRange(newCursor, newCursor)
+        })
+    })()
+    ;(() => {
+        const expiryInput = document.getElementById('cardExpiry')
+        if (!expiryInput) return
+        expiryInput.addEventListener('input', () => {
+            const raw = expiryInput.value
+            const cursor = expiryInput.selectionStart || 0
+            const digitsBeforeCursor = raw.slice(0, cursor).replace(/\D/g, '').length
+            const digitsOnly = raw.replace(/\D/g, '').slice(0, 4)
+            let formatted = digitsOnly
+            if (digitsOnly.length >= 3) {
+                formatted = `${digitsOnly.slice(0, 2)}/${digitsOnly.slice(2)}`
+            }
+            expiryInput.value = formatted
+            let newCursor = digitsBeforeCursor
+            if (digitsBeforeCursor >= 3) {
+                newCursor += 1
+            }
+            newCursor = Math.min(formatted.length, Math.max(0, newCursor))
+            expiryInput.setSelectionRange(newCursor, newCursor)
+        })
+    })()
+</script>
+
+<%- include('partials/footer') %>

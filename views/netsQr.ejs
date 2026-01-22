@@ -1,0 +1,138 @@
+<%- include('partials/head', { pageTitle: title || 'NETS QR Payment' }) %>
+<script src="https://unpkg.com/event-source-polyfill"></script>
+
+<section class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4 p-lg-5">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+                    <div>
+                        <p class="text-uppercase small text-muted mb-1">NETS QR payment</p>
+                        <h1 class="h3 mb-2">Scan the QR to complete checkout</h1>
+                        <p id="status" class="text-muted mb-0">Scan with your bank simulator app to complete payment.</p>
+                    </div>
+                    <span id="timer" class="badge bg-light text-dark px-3 py-2">Time remaining: 5:00</span>
+                </div>
+                <div class="row g-4 align-items-center">
+                    <div class="col-lg-5">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body p-4 text-center">
+                                <p class="small text-muted text-uppercase mb-3">Scan this code</p>
+                                <img class="img-fluid rounded-3 shadow-sm border" src="<%= qrCodeUrl %>" alt="NETS QR Code">
+                                <div class="mt-3 small text-muted">Keep this window open while completing payment.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body p-4">
+                                <p class="text-uppercase small text-muted mb-3">How it works</p>
+                                <img class="img-fluid rounded-3 shadow-sm border" src="/images/netsQrInfo.png" alt="NETS QR steps">
+                                <div class="d-flex flex-wrap gap-3 mt-4">
+                                    <a href="/checkout" class="btn btn-outline-secondary">Back to checkout</a>
+                                    <span class="badge bg-primary-subtle text-primary align-self-center">Secure NETS gateway</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+        let s2sNetsTxnStatus; // Declare a variable to hold the EventSource instance
+
+        if (s2sNetsTxnStatus) {
+            s2sNetsTxnStatus.close();
+        }
+
+        const txnRetrievalRef = "<%= txnRetrievalRef %>"; // Transaction reference
+        const courseInitId = "<%= courseInitId %>"; // Course Init ID
+        const url = `/sse/payment-status/${txnRetrievalRef}`; 
+   
+        const headers = {
+            "api-key": "<%= apiKey %>",
+            "project-id": "<%= projectId %>",
+        };
+
+        console.log("NETS REQUEST response:", <%- JSON.stringify(fullNetsResponse) %>);
+
+
+        // Initialize EventSource with credentials for session cookies.
+        const EventSourceClient = window.EventSourcePolyfill || window.EventSource
+        if (!EventSourceClient) {
+            console.error('EventSource is not supported in this browser.')
+        } else {
+            const options = {
+                withCredentials: true,
+                heartbeatTimeout: 150000,
+            }
+            if (EventSourceClient === window.EventSourcePolyfill) {
+                options.headers = headers
+            }
+            s2sNetsTxnStatus = new EventSourceClient(url, options)
+        }
+
+        s2sNetsTxnStatus?.addEventListener("message", (event) => {
+            let data = null
+            try {
+                data = JSON.parse(event.data)
+            } catch (error) {
+                console.error('Unable to parse NETS status payload.', error)
+                return
+            }
+            console.log("NETS Query Response:", data);
+            const raw = data.raw || {};
+            const statusDesc = String(raw.txn_status_desc || "").toLowerCase();
+            const responseCode = String(raw.response_code || "");
+            const txnStatus = Number(raw.txn_status);
+
+            // Check for payment success
+            if (data.success) {
+                if (s2sNetsTxnStatus) s2sNetsTxnStatus.close();
+                window.location.href = `/nets-qr/success?txn_retrieval_ref=${txnRetrievalRef}`;
+            } else if (data.fail) {
+                if (s2sNetsTxnStatus) s2sNetsTxnStatus.close();
+                window.location.href = `/nets-qr/fail?txn_retrieval_ref=${txnRetrievalRef}`;
+            } else if (
+                responseCode === "00" &&
+                (txnStatus === 2 || statusDesc.includes("success") || statusDesc.includes("approved"))
+            ) {
+                if (s2sNetsTxnStatus) s2sNetsTxnStatus.close();
+                window.location.href = `/nets-qr/success?txn_retrieval_ref=${txnRetrievalRef}`;
+            }
+        });
+
+        console.log("Initialized EventSourcePolyfill");
+
+        // Countdown Timer Logic
+        const timerElement = document.getElementById("timer");
+        const countdownDuration = 300; // 5 minutes in seconds
+        let remainingTime = countdownDuration;
+
+        const updateTimer = () => {
+            const minutes = Math.floor(remainingTime / 60);
+            const seconds = remainingTime % 60;
+            timerElement.textContent = `Time remaining: ${minutes}:${seconds.toString().padStart(2, "0")}`;
+            remainingTime--;
+
+            if (remainingTime < 0) {
+                clearInterval(timerInterval);
+                timerElement.textContent = "Transaction timed out.";
+
+                if (s2sNetsTxnStatus) {
+                    s2sNetsTxnStatus.close();
+                }
+                window.location.href = `/nets-qr/fail?txn_retrieval_ref=${txnRetrievalRef}`; // Redirect to fail page
+            }
+        };
+
+        // Start the timer
+        const timerInterval = setInterval(updateTimer, 1000);
+        updateTimer(); // Initial call to set the timer immediately
+
+
+    </script>
+<%- include('partials/footer') %>
