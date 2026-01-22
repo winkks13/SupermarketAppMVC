@@ -3,8 +3,8 @@ const db = require('../db')
 class User {
     static async create(user) {
         const sql = `
-            INSERT INTO users (username, email, password, address, contact, role)
-            VALUES (?, ?, SHA1(?), ?, ?, ?)
+            INSERT INTO users (username, email, password, address, contact, role, walletBalance)
+            VALUES (?, ?, SHA1(?), ?, ?, ?, ?)
         `
 
         const payload = [
@@ -13,7 +13,8 @@ class User {
             user.password,
             user.address,
             user.contact,
-            user.role || 'user'
+            user.role || 'user',
+            user.walletBalance || 0
         ]
 
         const [result] = await db.query(sql, payload)
@@ -82,6 +83,24 @@ class User {
             values
         )
 
+        return result
+    }
+
+    static async addWalletBalance(userId, amount) {
+        const [result] = await db.query(
+            'UPDATE users SET walletBalance = COALESCE(walletBalance, 0) + ? WHERE id = ?',
+            [amount, userId]
+        )
+        return result
+    }
+
+    static async deductWalletBalance(userId, amount) {
+        const [result] = await db.query(
+            `UPDATE users
+            SET walletBalance = COALESCE(walletBalance, 0) - ?
+            WHERE id = ? AND COALESCE(walletBalance, 0) >= ?`,
+            [amount, userId, amount]
+        )
         return result
     }
 }
