@@ -49,6 +49,10 @@
                 </ul>
                 <div class="d-flex align-items-center gap-3">
                     <% if (currentUser) { %>
+                        <a class="btn cart-button position-relative" href="/wallet" aria-label="Wallet">
+                            <i class="bi bi-wallet2 fs-5"></i>
+                        </a>
+                        <span class="text-white small">$<%= Number(currentUser.walletBalance || 0).toFixed(2) %></span>
                         <a class="btn cart-button position-relative" href="/cart" aria-label="Cart">
                             <i class="bi bi-cart3 fs-5"></i>
                             <span class="badge bg-danger position-absolute top-0 start-100 translate-middle rounded-pill"><%= cartCount %></span>
