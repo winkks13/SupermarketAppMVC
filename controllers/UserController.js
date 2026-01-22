@@ -111,6 +111,26 @@ class UserController {
         }
     }
 
+    static async showWallet(req, res) {
+        try {
+            const user = await User.findById(Number(req.session.user.id))
+            if (!user) {
+                req.flash('error', 'Unable to load your wallet.')
+                return res.redirect('/shop')
+            }
+
+            res.render('wallet', {
+                pageTitle: 'Wallet top-up',
+                user,
+                active: ''
+            })
+        } catch (err) {
+            console.error(err)
+            req.flash('error', 'Unable to load your wallet.')
+            res.redirect('/shop')
+        }
+    }
+
     static async updateProfile(req, res) {
         const userId = Number(req.session.user.id)
         if (!Number.isFinite(userId)) {
@@ -150,6 +170,43 @@ class UserController {
             console.error(err)
             req.flash('error', 'Unable to update your profile right now.')
             res.redirect('/profile')
+        }
+    }
+
+    static async rechargeWallet(req, res) {
+        const userId = Number(req.session.user.id)
+        if (!Number.isFinite(userId)) {
+            req.flash('error', 'Invalid user identifier.')
+            return res.redirect('/login')
+        }
+
+        const amount = Number(req.body.amount)
+        const cardName = (req.body.cardName || '').trim()
+        const cardNumber = (req.body.cardNumber || '').replace(/\s+/g, '')
+        const cardExpiry = (req.body.cardExpiry || '').trim()
+        const cardCvv = (req.body.cardCvv || '').trim()
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+            req.flash('error', 'Please enter a valid top-up amount.')
+            return res.redirect('/wallet')
+        }
+
+        if (!cardName || !/^\d{16}$/.test(cardNumber) || !/^(0[1-9]|1[0-2])\/\d{2,4}$/.test(cardExpiry) || !/^\d{3,4}$/.test(cardCvv)) {
+            req.flash('error', 'Please enter valid card details.')
+            return res.redirect('/wallet')
+        }
+
+        try {
+            await User.addWalletBalance(userId, amount)
+            const refreshedUser = await User.findById(userId)
+            req.session.user = refreshedUser
+
+            req.flash('success', `Wallet recharged with $${amount.toFixed(2)}.`)
+            res.redirect('/wallet')
+        } catch (err) {
+            console.error(err)
+            req.flash('error', 'Unable to recharge wallet right now.')
+            res.redirect('/wallet')
         }
     }
 

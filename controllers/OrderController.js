@@ -1,6 +1,8 @@
 const Product = require('../models/Product')
 const Order = require('../models/Order')
+const User = require('../models/User')
 const { getCart, calculateTotals, clearCart } = require('./cartUtils')
+const NetsController = require('./NetsController')
 
 const getUserId = (user = {}) => user?.id
 const ALLOWED_STATUSES = ['PAID', 'FULFILLED', 'CANCELLED', 'CASH_ON_DELIVERY']
@@ -53,7 +55,16 @@ class OrderController {
                 return res.redirect('/checkout')
             }
 
-            const paymentMethod = (req.body.paymentMethod || req.session.pendingCheckout?.paymentMethod) === 'cash' ? 'cash' : 'card'
+            const requestedMethod = req.body.paymentMethod || req.session.pendingCheckout?.paymentMethod
+            const paymentMethod = requestedMethod === 'cash'
+                ? 'cash'
+                : requestedMethod === 'nets'
+                    ? 'nets'
+                    : requestedMethod === 'paypal'
+                        ? 'paypal'
+                        : requestedMethod === 'wallet'
+                            ? 'wallet'
+                            : 'card'
 
             // Stage 1: card selected but no card details yet -> render card form
             if (paymentMethod === 'card' && !req.body.cardNumber) {
@@ -69,10 +80,39 @@ class OrderController {
                 })
             }
 
+            if (paymentMethod === 'paypal') {
+                req.session.pendingCheckout = {
+                    shippingAddress,
+                    paymentMethod
+                }
+
+                return res.redirect('/checkout/paypal')
+            }
+
+            if (paymentMethod === 'nets') {
+                req.session.pendingCheckout = {
+                    shippingAddress,
+                    paymentMethod
+                }
+
+                return NetsController.generateQrCode(req, res)
+            }
+
             const status = paymentMethod === 'cash' ? 'CASH_ON_DELIVERY' : 'PAID'
 
             await Product.ensureStock(cart.items)
             await Product.decrementStock(cart.items)
+
+            if (paymentMethod === 'wallet') {
+                const total = Number(cart.totals.total)
+                const result = await User.deductWalletBalance(userId, total)
+                if (!result.affectedRows) {
+                    req.flash('error', 'Insufficient wallet balance.')
+                    return res.redirect('/checkout')
+                }
+                const refreshedUser = await User.findById(userId)
+                req.session.user = refreshedUser
+            }
 
             const priorOrders = await Order.countByUser(userId)
             const orderNumber = priorOrders + 1
