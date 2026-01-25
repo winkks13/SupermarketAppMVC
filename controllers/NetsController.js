@@ -9,7 +9,7 @@ const NETS_QR_REQUEST_URL = 'https://sandbox.nets.openapipaas.com/api/v1/common/
 const NETS_QR_QUERY_URL = 'https://sandbox.nets.openapipaas.com/api/v1/common/payments/nets-qr/query'
 const DEFAULT_TXN_ID = 'sandbox_nets|m|8ff8e5b6-d43e-4786-8ac5-7accf8c5bd9b'
 const SSE_POLL_INTERVAL_MS = 3000
-const SSE_TIMEOUT_MS = 150000
+const SSE_TIMEOUT_MS = 300000
 const NETS_REQUEST_TIMEOUT_MS = 12000
 
 function loadCourseInitId() {
@@ -52,6 +52,26 @@ async function postWithRetry(url, body, headers, retries = 1) {
     return null
 }
 
+async function queryNetsStatus({ txnRetrievalRef, txnId, txnNetsQrId }) {
+    const requestBody = {
+        txn_retrieval_ref: txnRetrievalRef
+    }
+    if (txnId) {
+        requestBody.txn_id = txnId
+    }
+    if (txnNetsQrId) {
+        requestBody.txn_nets_qr_id = txnNetsQrId
+    }
+
+    const response = await axios.post(NETS_QR_QUERY_URL, requestBody, {
+        headers: getNetsHeaders()
+    })
+
+    const statusData = response?.data?.result?.data || {}
+    const status = classifyTxnStatus(statusData)
+    return { status, statusData }
+}
+
 function classifyTxnStatus(data = {}) {
     const responseCode = String(data.response_code || '')
     const txnStatus = Number(data.txn_status)
@@ -64,13 +84,15 @@ function classifyTxnStatus(data = {}) {
     }
 
     if (
-        txnStatus === 2 ||
+        txnStatus === 1 ||
         paymentStatus === 1 ||
         statusText.includes('success') ||
         statusText.includes('approved') ||
+        statusText.includes('completed') ||
         paymentText.includes('success') ||
         paymentText.includes('approved') ||
-        paymentText.includes('paid')
+        paymentText.includes('paid') ||
+        paymentText.includes('completed')
     ) {
         return 'success'
     }
@@ -173,7 +195,8 @@ class NetsController {
                 req.session.netsPayment = {
                     txnRetrievalRef,
                     txnId,
-                    txnNetsQrId
+                    txnNetsQrId,
+                    courseInitId
                 }
                 req.session.netsOrderCompleted = null
 
@@ -232,22 +255,11 @@ class NetsController {
 
         const pollStatus = async () => {
             try {
-                const requestBody = {
-                    txn_retrieval_ref: txnRetrievalRef
-                }
-                if (txnId) {
-                    requestBody.txn_id = txnId
-                }
-                if (txnNetsQrId) {
-                    requestBody.txn_nets_qr_id = txnNetsQrId
-                }
-
-                const response = await axios.post(NETS_QR_QUERY_URL, requestBody, {
-                    headers: getNetsHeaders()
+                const { status, statusData } = await queryNetsStatus({
+                    txnRetrievalRef,
+                    txnId,
+                    txnNetsQrId
                 })
-
-                const statusData = response?.data?.result?.data || {}
-                const status = classifyTxnStatus(statusData)
 
                 if (status === 'success') {
                     sendEvent({ success: true, raw: statusData })
@@ -286,6 +298,29 @@ class NetsController {
             isClosed = true
             clearInterval(interval)
         })
+    }
+
+    static async getStatus(req, res) {
+        const txnRetrievalRef = req.params.txnRetrievalRef
+        const txnId = req.session.netsPayment?.txnId
+        const txnNetsQrId = req.session.netsPayment?.txnNetsQrId
+
+        if (!txnRetrievalRef) {
+            return res.status(400).json({ error: 'Missing transaction reference.' })
+        }
+
+        try {
+            const { status, statusData } = await queryNetsStatus({
+                txnRetrievalRef,
+                txnId,
+                txnNetsQrId
+            })
+
+            res.json({ status, raw: statusData })
+        } catch (error) {
+            console.error('Error fetching NETS status via API:', error.message)
+            res.status(500).json({ error: 'Unable to fetch NETS status.' })
+        }
     }
 
     static async showSuccess(req, res) {
