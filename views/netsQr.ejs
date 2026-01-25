@@ -49,9 +49,8 @@
         }
 
         const txnRetrievalRef = "<%= txnRetrievalRef %>"; // Transaction reference
-        const courseInitId = "<%= courseInitId %>"; // Course Init ID
         const url = `/sse/payment-status/${txnRetrievalRef}`; 
-   
+
         const headers = {
             "api-key": "<%= apiKey %>",
             "project-id": "<%= projectId %>",
@@ -59,6 +58,119 @@
 
         console.log("NETS REQUEST response:", <%- JSON.stringify(fullNetsResponse) %>);
 
+        const statusApiUrl = `/api/nets/payment-status/${encodeURIComponent(txnRetrievalRef)}`;
+        let fallbackInterval = null;
+        let hasRedirected = false;
+        const timerElement = document.getElementById("timer");
+        const countdownDuration = 300;
+        let remainingTime = countdownDuration;
+        let timerInterval = null;
+
+        const updateTimerDisplay = () => {
+            if (!timerElement) {
+                return;
+            }
+            const minutes = Math.floor(Math.max(remainingTime, 0) / 60);
+            const seconds = Math.max(remainingTime, 0) % 60;
+            timerElement.textContent = `Time remaining: ${minutes}:${seconds.toString().padStart(2, "0")}`;
+        };
+
+        const startTimer = () => {
+            updateTimerDisplay();
+            timerInterval = setInterval(() => {
+                remainingTime--;
+                updateTimerDisplay();
+                if (remainingTime < 0) {
+                    timerElement.textContent = "Transaction timed out.";
+                    finalizeRedirect(`/nets-qr/fail?txn_retrieval_ref=${txnRetrievalRef}`);
+                }
+            }, 1000);
+        };
+
+        const stopTimer = () => {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        };
+
+        const stopFallbackPolling = () => {
+            if (fallbackInterval) {
+                clearInterval(fallbackInterval);
+                fallbackInterval = null;
+            }
+        };
+
+        const finalizeRedirect = (redirectUrl) => {
+            if (hasRedirected) {
+                return;
+            }
+            hasRedirected = true;
+            stopFallbackPolling();
+            if (s2sNetsTxnStatus) {
+                s2sNetsTxnStatus.close();
+            }
+            stopTimer();
+            window.location.href = redirectUrl;
+        };
+
+        const handleStatusPayload = ({ raw = {}, success, fail, status }) => {
+            if (hasRedirected) {
+                return;
+            }
+            const statusDesc = String(raw.txn_status_desc || "").toLowerCase();
+            const paymentDesc = String(raw.payment_status_desc || "").toLowerCase();
+            const responseCode = String(raw.response_code || "");
+            const txnStatus = Number(raw.txn_status);
+
+            if (success || status === "success") {
+                finalizeRedirect(`/nets-qr/success?txn_retrieval_ref=${txnRetrievalRef}`);
+                return;
+            }
+
+            if (fail || status === "fail") {
+                finalizeRedirect(`/nets-qr/fail?txn_retrieval_ref=${txnRetrievalRef}`);
+                return;
+            }
+
+            if (
+                responseCode === "00" &&
+                (txnStatus === 2 ||
+                    statusDesc.includes("success") ||
+                    statusDesc.includes("approved") ||
+                    statusDesc.includes("completed") ||
+                    paymentDesc.includes("success") ||
+                    paymentDesc.includes("approved") ||
+                    paymentDesc.includes("completed"))
+            ) {
+                finalizeRedirect(`/nets-qr/success?txn_retrieval_ref=${txnRetrievalRef}`);
+            }
+        };
+
+        const pollFallbackStatus = async () => {
+            if (hasRedirected) {
+                return;
+            }
+            try {
+                const response = await fetch(statusApiUrl, {
+                    credentials: "include"
+                });
+                if (!response.ok) {
+                    throw new Error(`NETS fallback poll failed with status ${response.status}`);
+                }
+                const payload = await response.json();
+                console.log("NETS fallback status response:", payload);
+                handleStatusPayload({ raw: payload.raw || {}, status: payload.status });
+            } catch (error) {
+                console.error("NETS fallback poll error:", error);
+            }
+        };
+
+        const startFallbackPolling = () => {
+            stopFallbackPolling();
+            fallbackInterval = setInterval(pollFallbackStatus, 3000);
+            pollFallbackStatus();
+        };
 
         // Initialize EventSource with credentials for session cookies.
         const EventSourceClient = window.EventSourcePolyfill || window.EventSource
@@ -85,54 +197,15 @@
             }
             console.log("NETS Query Response:", data);
             const raw = data.raw || {};
-            const statusDesc = String(raw.txn_status_desc || "").toLowerCase();
-            const responseCode = String(raw.response_code || "");
-            const txnStatus = Number(raw.txn_status);
-
-            // Check for payment success
-            if (data.success) {
-                if (s2sNetsTxnStatus) s2sNetsTxnStatus.close();
-                window.location.href = `/nets-qr/success?txn_retrieval_ref=${txnRetrievalRef}`;
-            } else if (data.fail) {
-                if (s2sNetsTxnStatus) s2sNetsTxnStatus.close();
-                window.location.href = `/nets-qr/fail?txn_retrieval_ref=${txnRetrievalRef}`;
-            } else if (
-                responseCode === "00" &&
-                (txnStatus === 2 || statusDesc.includes("success") || statusDesc.includes("approved"))
-            ) {
-                if (s2sNetsTxnStatus) s2sNetsTxnStatus.close();
-                window.location.href = `/nets-qr/success?txn_retrieval_ref=${txnRetrievalRef}`;
-            }
+            handleStatusPayload({
+                raw,
+                success: data.success,
+                fail: data.fail
+            });
         });
 
+        startFallbackPolling();
+        startTimer();
         console.log("Initialized EventSourcePolyfill");
-
-        // Countdown Timer Logic
-        const timerElement = document.getElementById("timer");
-        const countdownDuration = 300; // 5 minutes in seconds
-        let remainingTime = countdownDuration;
-
-        const updateTimer = () => {
-            const minutes = Math.floor(remainingTime / 60);
-            const seconds = remainingTime % 60;
-            timerElement.textContent = `Time remaining: ${minutes}:${seconds.toString().padStart(2, "0")}`;
-            remainingTime--;
-
-            if (remainingTime < 0) {
-                clearInterval(timerInterval);
-                timerElement.textContent = "Transaction timed out.";
-
-                if (s2sNetsTxnStatus) {
-                    s2sNetsTxnStatus.close();
-                }
-                window.location.href = `/nets-qr/fail?txn_retrieval_ref=${txnRetrievalRef}`; // Redirect to fail page
-            }
-        };
-
-        // Start the timer
-        const timerInterval = setInterval(updateTimer, 1000);
-        updateTimer(); // Initial call to set the timer immediately
-
-
     </script>
 <%- include('partials/footer') %>
